@@ -1,0 +1,53 @@
+---
+title: 'OAuth'
+description: 'Call the API as a person in your workspace by having them sign in to your OAuth app.'
+---
+
+An OAuth app lets people in your workspace sign in to your application with their Plain account. Your app then calls the API as that person, with the permissions their role already has.
+
+If you only need an API key, create a [machine user](/graphql/authentication) instead.
+
+## Create an OAuth app
+
+Go to **Settings** → **OAuth applications** and click **Add OAuth app**.
+
+- **App name**: shown to the user when they sign in.
+- **Description**: optional.
+- **Redirect URLs**: where the user is sent after they sign in. Put each URL on its own line. Each one must be an absolute URL using https, or http on localhost.
+
+Creating the app shows a client ID and a client secret. The client ID identifies the app. Copy the client secret now. You won't be able to see it again, and if you lose it you'll need to create a new OAuth app.
+
+Turning the app off makes the API reject every token it already holds, until you turn the app back on. Deleting the app rejects them immediately.
+
+## Get an access token
+
+The authorization server is `https://signin.auth.plain.com`. Its discovery document is [`https://signin.auth.plain.com/.well-known/openid-configuration`](https://signin.auth.plain.com/.well-known/openid-configuration).
+
+Send the user to the authorize endpoint. `redirect_uri` has to be one of the app's redirect URLs. `nonce` is a random string you generate for that request. Include `offline_access` in `scope` to receive a refresh token.
+
+```text
+https://signin.auth.plain.com/oauth2/authorize?client_id=CLIENT_ID&redirect_uri=REDIRECT_URL&response_type=code&scope=openid%20offline_access&nonce=NONCE&state=STATE
+```
+
+Exchange the `code` from the redirect for an access token. Send the client secret in that request. Leave out a PKCE code challenge.
+
+```bash
+curl -X POST https://signin.auth.plain.com/oauth2/token \
+  -d client_id=CLIENT_ID \
+  -d client_secret=CLIENT_SECRET \
+  -d grant_type=authorization_code \
+  -d code=CODE \
+  -d redirect_uri=REDIRECT_URL
+```
+
+The response includes `access_token` and `expires_in`. When the authorize request included `offline_access`, it also includes `refresh_token`. Refresh with the same endpoint, `grant_type=refresh_token`, the client id, the client secret, and the refresh token.
+
+## Call the API
+
+Pass the access token on any API call, the same way as an API key:
+
+```text
+Authorization: Bearer ACCESS_TOKEN
+```
+
+The call runs as the user who signed in. If they lack a permission, the error tells you which one. The API URL and request shape are the same as for an API key. See the [introduction](/graphql/introduction).
